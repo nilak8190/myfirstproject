@@ -1,0 +1,29 @@
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  AWS_REGION: ap-south-1
+
+steps:
+
+- task: TerraformInstaller@1
+  inputs:
+    terraformVersion: '1.6.6'
+
+- task: AWSShellScript@1
+  inputs:
+    awsCredentials: 'aws-oidc-role'
+    regionName: '$(AWS_REGION)'
+    scriptType: 'inline'
+    inlineScript: |
+
+      terraform init
+
+      terraform validate
+
+      terraform plan -out=tfplan
+
+      terraform apply -auto-approve tfplan
