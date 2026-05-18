@@ -1,12 +1,23 @@
 trigger: none
 
+parameters:
+  - name: environmentPrefix
+    displayName: Image Prefix Environment
+    type: string
+    default: kpn-prod-
+    values:
+      - kpn-dev-
+      - kpn-stage-
+      - kpn-prod-
+
 pool:
   vmImage: ubuntu-latest
 
 variables:
   AWS_REGION: 'ap-south-1'
   ECR_REPOSITORY: 'my-app-repo'
-  IMAGE_TAG: '$(Build.BuildId)'
+  # Combine the parameter prefix with the Build ID
+  IMAGE_TAG: '${{ parameters.environmentPrefix }}$(Build.BuildId)'
 
 steps:
 - checkout: self
@@ -23,16 +34,19 @@ steps:
       echo "Retrieving AWS Account ID..."
       ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
       REGISTRY="$ACCOUNT_ID.dkr.ecr.$(AWS_REGION).amazonaws.com"
+      
+      # The resulting tag will look like: 123456789012.dkr.ecr.ap-south-1.amazonaws.com/my-app-repo:kpn-prod-142
       FULL_IMAGE_URI="$REGISTRY/$(ECR_REPOSITORY):$(IMAGE_TAG)"
       
       echo "Logging into Amazon ECR..."
       aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $REGISTRY
 
-      echo "Building Docker image..."
-      # Optimized: Build and tag with the full remote URI directly to save a step
+      echo "Building Docker image with tag: $(IMAGE_TAG)..."
       docker build -t $FULL_IMAGE_URI .
 
       echo "Pushing image to Amazon ECR..."
       docker push $FULL_IMAGE_URI
+      
+      echo "Successfully pushed $FULL_IMAGE_URI"
       
       echo "Successfully pushed $FULL_IMAGE_URI"
