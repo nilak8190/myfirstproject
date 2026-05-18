@@ -1,0 +1,60 @@
+trigger: none
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  AWS_REGION: ap-south-1
+  EKS_CLUSTER: hilarious-electro-wardrobe
+  ECR_REPOSITORY: my-app-repo
+  IMAGE_TAG: 28   # change this when needed
+
+steps:
+
+- checkout: self
+
+# -----------------------------
+# Install Helm
+# -----------------------------
+- task: HelmInstaller@1
+  inputs:
+    helmVersionToInstall: latest
+
+# -----------------------------
+# Configure kubeconfig for EKS
+# -----------------------------
+- task: AWSShellScript@1
+  displayName: Configure EKS Access
+  inputs:
+    awsCredentials: 'aws-oidc-role'
+    regionName: '$(AWS_REGION)'
+    scriptType: inline
+    inlineScript: |
+
+      aws eks update-kubeconfig \
+        --name $(EKS_CLUSTER) \
+        --region $(AWS_REGION)
+
+      kubectl get nodes
+
+# -----------------------------
+# Deploy using Helm
+# -----------------------------
+- task: AWSShellScript@1
+  displayName: Helm Deploy to EKS
+  inputs:
+    awsCredentials: 'aws-oidc-role'
+    regionName: '$(AWS_REGION)'
+    scriptType: inline
+    inlineScript: |
+
+      ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+      echo "Deploying image from ECR..."
+
+      helm upgrade --install hello-world ./helm/hello-world \
+        --set image.repository=$ACCOUNT_ID.dkr.ecr.$(AWS_REGION).amazonaws.com/$(ECR_REPOSITORY) \
+        --set image.tag=$(IMAGE_TAG)
+
+      kubectl get pods
+      kubectl get svc
