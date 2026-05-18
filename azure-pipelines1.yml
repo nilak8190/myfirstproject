@@ -4,46 +4,35 @@ pool:
   vmImage: ubuntu-latest
 
 variables:
-  AWS_REGION: ap-south-1
-  ECR_REPOSITORY: my-app-repo
-  IMAGE_TAG: $(Build.BuildId)
+  AWS_REGION: 'ap-south-1'
+  ECR_REPOSITORY: 'my-app-repo'
+  IMAGE_TAG: '$(Build.BuildId)'
 
 steps:
-
 - checkout: self
 
-# Login + get account ID (OIDC)
 - task: AWSShellScript@1
-  displayName: AWS Login + Get Account ID
+  displayName: 'Build, Tag, and Push to ECR'
   inputs:
     awsCredentials: 'aws-oidc-role'
     regionName: '$(AWS_REGION)'
     scriptType: inline
     inlineScript: |
-
+      set -e # Exit immediately if any command fails
+      
+      echo "Retrieving AWS Account ID..."
       ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      REGISTRY="$ACCOUNT_ID.dkr.ecr.$(AWS_REGION).amazonaws.com"
+      FULL_IMAGE_URI="$REGISTRY/$(ECR_REPOSITORY):$(IMAGE_TAG)"
+      
+      echo "Logging into Amazon ECR..."
+      aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $REGISTRY
 
-      echo "ACCOUNT_ID=$ACCOUNT_ID"
+      echo "Building Docker image..."
+      # Optimized: Build and tag with the full remote URI directly to save a step
+      docker build -t $FULL_IMAGE_URI .
 
-      aws ecr get-login-password --region $(AWS_REGION) | \
-      docker login --username AWS --password-stdin \
-      $ACCOUNT_ID.dkr.ecr.$(AWS_REGION).amazonaws.com
-
-      echo "##vso[task.setvariable variable=ACCOUNT_ID]$ACCOUNT_ID"
-
-# Build image
-- script: |
-    docker build -t $(ECR_REPOSITORY):$(IMAGE_TAG) .
-  displayName: Build Docker Image
-
-# Tag image
-- script: |
-    docker tag $(ECR_REPOSITORY):$(IMAGE_TAG) \
-    $(ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(ECR_REPOSITORY):$(IMAGE_TAG)
-  displayName: Tag Docker Image
-
-# Push image
-- script: |
-    docker push \
-    $(ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(ECR_REPOSITORY):$(IMAGE_TAG)
-  displayName: Push Docker Image
+      echo "Pushing image to Amazon ECR..."
+      docker push $FULL_IMAGE_URI
+      
+      echo "Successfully pushed $FULL_IMAGE_URI"
