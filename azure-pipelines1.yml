@@ -5,47 +5,44 @@ pool:
 
 variables:
   AWS_REGION: ap-south-1
-  ECR_REPOSITORY: hello-world
+  ECR_REPOSITORY: my-app-repo
   IMAGE_TAG: $(Build.BuildId)
 
 steps:
 
 - checkout: self
 
-# Login to ECR using AWS Service Connection (OIDC)
-- task: ECRLogin@1
-  displayName: Login to Amazon ECR
-  inputs:
-    awsCredentials: 'aws-oidc-connection'
-    regionName: '$(AWS_REGION)'
-
-# Get AWS Account ID
+# Login + get account ID (OIDC)
 - task: AWSShellScript@1
-  name: awsvars
-  displayName: Get AWS Account ID
+  displayName: AWS Login + Get Account ID
   inputs:
     awsCredentials: 'aws-oidc-connection'
     regionName: '$(AWS_REGION)'
     scriptType: inline
     inlineScript: |
+
       ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
-      echo "AWS Account ID: $ACCOUNT_ID"
+      echo "ACCOUNT_ID=$ACCOUNT_ID"
+
+      aws ecr get-login-password --region $(AWS_REGION) | \
+      docker login --username AWS --password-stdin \
+      $ACCOUNT_ID.dkr.ecr.$(AWS_REGION).amazonaws.com
 
       echo "##vso[task.setvariable variable=ACCOUNT_ID]$ACCOUNT_ID"
 
-# Build Docker Image
+# Build image
 - script: |
     docker build -t $(ECR_REPOSITORY):$(IMAGE_TAG) .
   displayName: Build Docker Image
 
-# Tag Docker Image
+# Tag image
 - script: |
     docker tag $(ECR_REPOSITORY):$(IMAGE_TAG) \
     $(ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(ECR_REPOSITORY):$(IMAGE_TAG)
   displayName: Tag Docker Image
 
-# Push Docker Image
+# Push image
 - script: |
     docker push \
     $(ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(ECR_REPOSITORY):$(IMAGE_TAG)
