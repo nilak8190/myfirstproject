@@ -16,7 +16,7 @@ steps:
 - task: AWSShellScript@1
   displayName: AWS Login + Get Account ID
   inputs:
-    awsCredentials: 'aws-oidc-connection'
+    awsCredentials: 'aws-oidc-role'
     regionName: '$(AWS_REGION)'
     scriptType: inline
     inlineScript: |
