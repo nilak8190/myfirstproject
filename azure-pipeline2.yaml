@@ -52,7 +52,7 @@ steps:
 
       echo "Deploying image from ECR..."
 
-      helm upgrade --install hello-world ./helm/hello-world \
+      helm upgrade --install hello-world ./hello-world \
         --set image.repository=$ACCOUNT_ID.dkr.ecr.$(AWS_REGION).amazonaws.com/$(ECR_REPOSITORY) \
         --set image.tag=$(IMAGE_TAG)
 
